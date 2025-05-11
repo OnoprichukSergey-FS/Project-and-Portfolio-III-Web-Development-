@@ -77,7 +77,7 @@ node server.js
 
 ---
 
-## 🔗 Important Links
+## Important Links
 
 > URLs may vary if you're using Ngrok for Spotify OAuth redirect.
 
@@ -90,7 +90,7 @@ node server.js
 
 ---
 
-## 📌 Notes
+## Notes
 
 - Spotify does **not** allow `localhost` in redirect URIs for production use — **Ngrok** is required for OAuth testing.
 - Make sure to register your Ngrok forwarding URL in your Spotify Developer Dashboard.
