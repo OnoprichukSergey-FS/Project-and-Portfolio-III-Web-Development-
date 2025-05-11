@@ -1,4 +1,4 @@
-# 🎧 Project and Portfolio III — Spotify Web App ()
+# 🎧 Project and Portfolio III — Spotify Web App
 
 This project utilizes the **Spotify Web API** to allow users to authenticate via Spotify and search for their favorite **songs**, **artists**, or **albums**.
 
