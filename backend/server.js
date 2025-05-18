@@ -90,6 +90,8 @@ app.get("/callback", async (req, res) => {
       { upsert: true, new: true }
     );
 
+    console.log("Token saved to MongoDB for:", user.id);
+
     // Create a JWT
     const token = jwt.sign(
       {
