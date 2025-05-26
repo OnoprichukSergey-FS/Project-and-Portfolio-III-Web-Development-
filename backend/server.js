@@ -8,6 +8,7 @@ const jwt = require("jsonwebtoken");
 require("dotenv").config();
 
 const Token = require("./models/Token");
+const verifyToken = require("./middleware/auth");
 
 const {
   SPOTIFY_CLIENT_ID,
@@ -20,6 +21,7 @@ const {
 
 const app = express();
 
+// Basic middleware setup
 app.use(cors({ origin: "http://localhost:3000", credentials: true }));
 app.use(cookieParser());
 app.use(express.json());
@@ -30,7 +32,7 @@ mongoose
   .then(() => console.log("Connected to MongoDB"))
   .catch((err) => console.error("MongoDB connection error:", err));
 
-// Login route — redirects user to Spotify's login page
+// STEP 1: Redirect user to Spotify login
 app.get("/login", (req, res) => {
   const scope = "user-read-private user-read-email";
   const queryParams = qs.stringify({
@@ -43,14 +45,13 @@ app.get("/login", (req, res) => {
   res.redirect(`https://accounts.spotify.com/authorize?${queryParams}`);
 });
 
-// Callback route — handles Spotify's response and saves tokens
+// STEP 2: Spotify redirects back to us with a code
 app.get("/callback", async (req, res) => {
-  const code = req.query.code || null;
-
-  if (!code) return res.status(400).send("No code provided");
+  const code = req.query.code;
+  if (!code) return res.status(400).send("Missing code from Spotify");
 
   try {
-    // Exchange the code for access & refresh tokens
+    // Exchange code for tokens
     const response = await axios.post(
       "https://accounts.spotify.com/api/token",
       qs.stringify({
@@ -72,14 +73,14 @@ app.get("/callback", async (req, res) => {
 
     const { access_token, refresh_token, expires_in } = response.data;
 
-    // Fetch user's Spotify profile info
+    // Get user info from Spotify
     const userResponse = await axios.get("https://api.spotify.com/v1/me", {
       headers: { Authorization: `Bearer ${access_token}` },
     });
 
     const user = userResponse.data;
 
-    // Save token info in MongoDB
+    // Save access and refresh token to DB
     await Token.findOneAndUpdate(
       { userId: user.id },
       {
@@ -87,28 +88,20 @@ app.get("/callback", async (req, res) => {
         refreshToken: refresh_token,
         expiresAt: new Date(Date.now() + expires_in * 1000),
       },
-      { upsert: true, new: true }
+      { upsert: true }
     );
 
-    console.log("Token saved to MongoDB for:", user.id);
-
-    // Create a JWT
-    const token = jwt.sign(
-      {
-        user_id: user.id,
-        access_token: access_token,
-      },
-      JWT_SECRET,
-      { expiresIn: "1h" }
-    );
-
-    // Send the JWT as a secure cookie
+    // Create JWT and set it as a cookie
+    const token = jwt.sign({ user_id: user.id }, JWT_SECRET, {
+      expiresIn: "1h",
+    });
     res.cookie("jwt", token, {
       httpOnly: true,
-      sameSite: "lax",
+      sameSite: "none",
+      secure: true,
     });
 
-    // ✅ Redirect the user to the dashboard
+    // Send user to the frontend dashboard
     res.redirect("http://localhost:3000/dashboard");
   } catch (err) {
     console.error("Error in /callback:", err.message);
@@ -116,7 +109,87 @@ app.get("/callback", async (req, res) => {
   }
 });
 
-// Logout route — clears JWT cookie
+// STEP 3: Protected route to get user's Spotify profile
+app.get("/me", verifyToken, async (req, res) => {
+  try {
+    const record = await Token.findOne({ userId: req.user.user_id });
+    if (!record) return res.status(404).send("User token not found");
+
+    const profile = await axios.get("https://api.spotify.com/v1/me", {
+      headers: { Authorization: `Bearer ${record.accessToken}` },
+    });
+
+    res.json(profile.data);
+  } catch (err) {
+    res.status(500).send("Failed to load profile");
+  }
+});
+
+// STEP 4: Protected search route (track, artist, album)
+app.get("/search", verifyToken, async (req, res) => {
+  const { q, type } = req.query;
+  if (!q || !type) return res.status(400).send("Missing query or type");
+
+  try {
+    const record = await Token.findOne({ userId: req.user.user_id });
+    if (!record) return res.status(401).send("Token not found");
+
+    const response = await axios.get("https://api.spotify.com/v1/search", {
+      headers: { Authorization: `Bearer ${record.accessToken}` },
+      params: { q, type, limit: 10 },
+    });
+
+    res.json(response.data);
+  } catch (err) {
+    res.status(500).send("Search failed");
+  }
+});
+
+// STEP 5: Refresh the user's token using refresh_token
+app.get("/refresh_token", verifyToken, async (req, res) => {
+  try {
+    const record = await Token.findOne({ userId: req.user.user_id });
+    if (!record || !record.refreshToken)
+      return res.status(401).send("No refresh token available");
+
+    const response = await axios.post(
+      "https://accounts.spotify.com/api/token",
+      qs.stringify({
+        grant_type: "refresh_token",
+        refresh_token: record.refreshToken,
+      }),
+      {
+        headers: {
+          Authorization:
+            "Basic " +
+            Buffer.from(
+              `${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`
+            ).toString("base64"),
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      }
+    );
+
+    const { access_token, expires_in } = response.data;
+
+    // Update the stored access token and expiration
+    record.accessToken = access_token;
+    record.expiresAt = new Date(Date.now() + expires_in * 1000);
+    await record.save();
+
+    // Refresh the JWT too
+    const newJWT = jwt.sign({ user_id: req.user.user_id }, JWT_SECRET, {
+      expiresIn: "1h",
+    });
+    res.cookie("jwt", newJWT, { httpOnly: true, sameSite: "lax" });
+
+    res.status(200).send("Token refreshed");
+  } catch (err) {
+    res.status(500).send("Token refresh failed");
+  }
+});
+
+// STEP 6: Logout and clear the JWT cookie
 app.get("/logout", (req, res) => {
   res.clearCookie("jwt");
   res.sendStatus(204);

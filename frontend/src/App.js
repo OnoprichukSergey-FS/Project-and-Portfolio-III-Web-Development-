@@ -1,8 +1,9 @@
 import React from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import Home from "./Home";
+import Home from "./components/Home";
 import Dashboard from "./components/Dashboard";
 
+// Sets up routing between the Home and Dashboard pages
 function App() {
   return (
     <Router>
