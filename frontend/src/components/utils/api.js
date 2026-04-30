@@ -9,9 +9,7 @@ export const saveAuthTokenFromUrl = () => {
 
   if (token) {
     localStorage.setItem(TOKEN_KEY, token);
-
-    const cleanUrl = window.location.pathname;
-    window.history.replaceState({}, document.title, cleanUrl);
+    window.history.replaceState({}, document.title, window.location.pathname);
   }
 };
 
@@ -41,18 +39,13 @@ export const fetchUser = () => {
   });
 };
 
-export const searchSpotify = async (query) => {
-  const response = await fetch(
-    `${BASE_URL}/search?q=${encodeURIComponent(query)}&type=track,artist,album`,
-    {
-      credentials: "include",
-      headers: getAuthHeaders(),
-    }
-  );
-
-  if (!response.ok) throw new Error("Search failed");
-
-  return response.json();
+export const refreshToken = () => {
+  return fetch(`${BASE_URL}/refresh_token`, {
+    credentials: "include",
+    headers: getAuthHeaders(),
+  }).then((res) => {
+    if (!res.ok) throw new Error("Token refresh failed");
+  });
 };
 
 export const logoutUser = () => {
@@ -62,4 +55,22 @@ export const logoutUser = () => {
     credentials: "include",
     headers: getAuthHeaders(),
   });
+};
+
+export const searchSpotify = async (query) => {
+  const response = await fetch(
+    `${BASE_URL}/search?q=${encodeURIComponent(query)}&type=track,artist,album`,
+    {
+      credentials: "include",
+      headers: getAuthHeaders(),
+    }
+  );
+
+  if (response.status === 401) {
+    throw new Error("session-expired");
+  }
+
+  if (!response.ok) throw new Error("Search failed");
+
+  return response.json();
 };
