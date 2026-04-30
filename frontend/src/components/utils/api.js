@@ -1,6 +1,8 @@
-// src/utils/api.js
-const BASE_URL =
-  "https://c9e9-2600-1700-3cb0-4960-1d36-9275-acd-5beb.ngrok-free.app";
+const BASE_URL = "http://127.0.0.1:3001";
+
+export const loginUser = () => {
+  window.location.href = `${BASE_URL}/login`;
+};
 
 export const fetchUser = () => {
   return fetch(`${BASE_URL}/me`, { credentials: "include" }).then((res) => {
@@ -24,9 +26,7 @@ export const logoutUser = () => {
 export const searchSpotify = async (query) => {
   const response = await fetch(
     `${BASE_URL}/search?q=${encodeURIComponent(query)}&type=track,artist,album`,
-    {
-      credentials: "include",
-    }
+    { credentials: "include" }
   );
 
   if (response.status === 401) {

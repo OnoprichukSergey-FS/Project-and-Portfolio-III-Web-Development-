@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchUser, refreshToken, logoutUser } from "./utils/api";
 import Search from "./Search";
+import "../App.css";
 
 export default function Dashboard() {
   const [user, setUser] = useState(null);
@@ -29,7 +30,6 @@ export default function Dashboard() {
     const intervalId = setInterval(async () => {
       try {
         await refreshToken();
-        console.log("Token refreshed");
       } catch {
         setErrorUser("Session expired, please log in again");
         setUser(null);
@@ -51,62 +51,36 @@ export default function Dashboard() {
     }
   };
 
-  if (loadingUser)
-    return (
-      <p style={{ textAlign: "center", marginTop: 50, color: "white" }}>
-        Loading user info...
-      </p>
-    );
+  if (loadingUser) {
+    return <p className="loading-text">Loading user info...</p>;
+  }
 
   return (
-    <div
-      style={{ backgroundColor: "#000", minHeight: "100vh", color: "white" }}
-    >
-      {/* Header Bar */}
-      <header
-        style={{
-          display: "flex",
-          alignItems: "center",
-          padding: "15px 30px",
-          backgroundColor: "#000",
-          borderBottom: "1px solid #222",
-        }}
-      >
-        <i
-          className="fab fa-spotify"
-          style={{ fontSize: 28, color: "#1DB954", marginRight: 15 }}
-        ></i>
-        <span style={{ fontSize: 20, fontWeight: "bold", marginRight: 30 }}>
-          Spotify Search
-        </span>
+    <div className="app-page">
+      <header className="topbar">
+        <div className="brand-left">
+          <div className="brand-mark">♪</div>
+          <div>
+            <h2>SoundScope</h2>
+            <p>Music discovery dashboard</p>
+          </div>
+        </div>
+
         {user && (
-          <button
-            onClick={handleLogout}
-            style={{
-              padding: "8px 16px",
-              fontSize: 14,
-              backgroundColor: "#1DB954",
-              color: "white",
-              border: "none",
-              borderRadius: 20,
-              cursor: "pointer",
-              fontWeight: "bold",
-            }}
-          >
+          <button onClick={handleLogout} className="logout-button">
             Logout
           </button>
         )}
       </header>
 
-      {/* Optional Error Message */}
-      {errorUser && (
-        <p style={{ color: "red", textAlign: "center", marginTop: 10 }}>
-          {errorUser}
-        </p>
-      )}
+      {errorUser && <p className="error-text">{errorUser}</p>}
 
-      {/* Main Search Section */}
       <Search />
+
+      <footer className="footer-note">
+        This project uses the Spotify Web API and is not affiliated with
+        Spotify.
+      </footer>
     </div>
   );
 }

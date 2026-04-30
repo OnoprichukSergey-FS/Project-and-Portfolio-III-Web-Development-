@@ -1,12 +1,14 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { searchSpotify } from "./utils/api";
+import "../App.css";
 
 export default function Search() {
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
   const navigate = useNavigate();
 
   const handleSearch = async (e) => {
@@ -25,6 +27,7 @@ export default function Search() {
       } else {
         setError("Failed to fetch search results.");
       }
+
       setSearchResults(null);
     } finally {
       setLoading(false);
@@ -33,30 +36,14 @@ export default function Search() {
 
   const renderGrid = (items, type) => {
     return (
-      <div style={{ marginBottom: 40 }}>
-        <h2
-          style={{
-            color: "white",
-            fontSize: 22,
-            marginBottom: 15,
-            display: "flex",
-            alignItems: "center",
-            gap: 10,
-          }}
-        >
-          {type} <span style={{ fontSize: 18 }}>➝</span>
-        </h2>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))",
-            gap: 20,
-          }}
-        >
+      <section className="result-section">
+        <h2>{type} →</h2>
+
+        <div className="result-grid">
           {items.map((item) => {
             const image =
               item.images?.[0]?.url ||
-              item.album?.images?.[0]?.url || // for songs
+              item.album?.images?.[0]?.url ||
               "https://via.placeholder.com/150";
 
             const name = item.name;
@@ -68,105 +55,38 @@ export default function Search() {
                 href={link}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{
-                  textDecoration: "none",
-                  color: "white",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  backgroundColor: "#1a1a1a",
-                  borderRadius: 8,
-                  overflow: "hidden",
-                  paddingBottom: 10,
-                  transition: "transform 0.2s",
-                }}
+                className="result-card"
               >
-                <img
-                  src={image}
-                  alt={name}
-                  style={{
-                    width: "100%",
-                    height: 150,
-                    objectFit: "cover",
-                    marginBottom: 8,
-                  }}
-                />
-                <div style={{ fontWeight: "bold", textAlign: "center" }}>
-                  <i
-                    className="fab fa-spotify"
-                    style={{ marginRight: 6, color: "#1DB954" }}
-                  ></i>
-                  {name}
+                <img src={image} alt={name} />
+
+                <div className="card-body">
+                  <span className="mini-icon">♪</span>
+                  <strong>{name}</strong>
                 </div>
               </a>
             );
           })}
         </div>
-      </div>
+      </section>
     );
   };
 
   return (
-    <section
-      style={{
-        marginTop: 40,
-        padding: "0 20px 60px",
-        backgroundColor: "#000000",
-        minHeight: "100vh",
-        fontFamily: "Arial, sans-serif",
-      }}
-    >
-      {/* Search Bar */}
-      <form
-        onSubmit={handleSearch}
-        style={{ textAlign: "center", marginBottom: 40 }}
-      >
+    <main className="search-page">
+      <form onSubmit={handleSearch} className="search-form">
         <input
           type="text"
-          placeholder=" Search for artist..."
+          placeholder="Search artists, albums, or tracks..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          style={{
-            padding: "12px 20px",
-            width: "70%",
-            maxWidth: 500,
-            fontSize: 18,
-            borderRadius: 30,
-            border: "1px solid #ccc",
-            fontFamily: "Arial, sans-serif",
-          }}
         />
-        <button
-          type="submit"
-          style={{
-            padding: "12px 25px",
-            marginLeft: 10,
-            fontSize: 16,
-            borderRadius: 30,
-            backgroundColor: "#1DB954",
-            color: "white",
-            border: "none",
-            cursor: "pointer",
-            fontWeight: "bold",
-          }}
-        >
-          Search
-        </button>
+
+        <button type="submit">Search</button>
       </form>
 
-      {/* Loading/Error */}
-      {loading && (
-        <p style={{ color: "white", textAlign: "center" }}>
-          Loading results...
-        </p>
-      )}
-      {error && (
-        <p style={{ color: "red", textAlign: "center", marginBottom: 30 }}>
-          {error}
-        </p>
-      )}
+      {loading && <p className="loading-text">Loading results...</p>}
+      {error && <p className="error-text">{error}</p>}
 
-      {/* Results */}
       {searchResults?.artists?.items.length > 0 &&
         renderGrid(searchResults.artists.items, "Artists")}
 
@@ -174,7 +94,7 @@ export default function Search() {
         renderGrid(searchResults.albums.items, "Albums")}
 
       {searchResults?.tracks?.items.length > 0 &&
-        renderGrid(searchResults.tracks.items, "Songs")}
-    </section>
+        renderGrid(searchResults.tracks.items, "Tracks")}
+    </main>
   );
 }
