@@ -1,4 +1,5 @@
-const BASE_URL = "http://127.0.0.1:3001";
+const BASE_URL =
+  "https://project-and-portfolio-iii-web-development.onrender.com";
 
 export const loginUser = () => {
   window.location.href = `${BASE_URL}/login`;
