@@ -16,6 +16,7 @@ const {
   SPOTIFY_REDIRECT_URI,
   JWT_SECRET,
   MONGO_URI,
+  FRONTEND_URL,
   PORT = 3001,
 } = process.env;
 
@@ -23,11 +24,7 @@ const app = express();
 
 app.use(
   cors({
-    origin: [
-      "http://localhost:3000",
-      "http://127.0.0.1:3000",
-      "https://sergey-spotify-search-app.netlify.app",
-    ],
+    origin: FRONTEND_URL,
     credentials: true,
   })
 );
@@ -35,25 +32,22 @@ app.use(
 app.use(cookieParser());
 app.use(express.json());
 
+// ✅ Mongo
 mongoose
   .connect(MONGO_URI)
-  .then(() => console.log("Connected to MongoDB"))
-  .catch((err) => console.error("MongoDB connection error:", err));
+  .then(() => console.log("✅ MongoDB connected"))
+  .catch((err) => console.error("❌ Mongo error:", err));
 
+// ✅ Health check
 app.get("/", (req, res) => {
   res.json({
-    message: "Spotify backend is running",
-    routes: [
-      "/login",
-      "/callback",
-      "/me",
-      "/search",
-      "/refresh_token",
-      "/logout",
-    ],
+    message: "Backend running",
   });
 });
 
+// =====================
+// 🔐 LOGIN
+// =====================
 app.get("/login", (req, res) => {
   const scope = "user-read-private user-read-email";
 
@@ -67,15 +61,19 @@ app.get("/login", (req, res) => {
   res.redirect(`https://accounts.spotify.com/authorize?${queryParams}`);
 });
 
+// =====================
+// 🔁 CALLBACK
+// =====================
 app.get("/callback", async (req, res) => {
   const code = req.query.code;
 
   if (!code) {
-    return res.status(400).send("Missing code from Spotify");
+    return res.status(400).send("Missing code");
   }
 
   try {
-    const response = await axios.post(
+    // 🔥 Get token from Spotify
+    const tokenRes = await axios.post(
       "https://accounts.spotify.com/api/token",
       qs.stringify({
         grant_type: "authorization_code",
@@ -94,16 +92,18 @@ app.get("/callback", async (req, res) => {
       }
     );
 
-    const { access_token, refresh_token, expires_in } = response.data;
+    const { access_token, refresh_token, expires_in } = tokenRes.data;
 
-    const userResponse = await axios.get("https://api.spotify.com/v1/me", {
+    // 🔥 Get user
+    const userRes = await axios.get("https://api.spotify.com/v1/me", {
       headers: {
         Authorization: `Bearer ${access_token}`,
       },
     });
 
-    const user = userResponse.data;
+    const user = userRes.data;
 
+    // 🔥 Save token in DB
     await Token.findOneAndUpdate(
       { userId: user.id },
       {
@@ -112,36 +112,37 @@ app.get("/callback", async (req, res) => {
         refreshToken: refresh_token,
         expiresAt: new Date(Date.now() + expires_in * 1000),
       },
-      {
-        upsert: true,
-        new: true,
-      }
+      { upsert: true }
     );
 
+    // 🔥 Create JWT
     const token = jwt.sign({ user_id: user.id }, JWT_SECRET, {
       expiresIn: "1h",
     });
 
+    // ✅ IMPORTANT FIX (Netlify requires this)
     res.cookie("jwt", token, {
       httpOnly: true,
-      sameSite: "lax",
-      secure: false,
+      secure: true,
+      sameSite: "none",
     });
 
-    res.redirect("https://sergey-spotify-search-app.netlify.app/dashboard");
+    // ✅ Redirect to frontend
+    res.redirect(`${FRONTEND_URL}/dashboard`);
   } catch (err) {
-    console.error("Error in /callback:", err.response?.data || err.message);
+    console.error("❌ CALLBACK ERROR:");
+    console.error(err.response?.data || err.message);
+
     res.status(500).send("Authentication failed");
   }
 });
 
+// =====================
+// 👤 GET USER
+// =====================
 app.get("/me", verifyToken, async (req, res) => {
   try {
     const record = await Token.findOne({ userId: req.user.user_id });
-
-    if (!record) {
-      return res.status(404).send("User token not found");
-    }
 
     const profile = await axios.get("https://api.spotify.com/v1/me", {
       headers: {
@@ -151,24 +152,19 @@ app.get("/me", verifyToken, async (req, res) => {
 
     res.json(profile.data);
   } catch (err) {
-    console.error("Error in /me:", err.response?.data || err.message);
-    res.status(500).send("Failed to load profile");
+    console.error("❌ /me error:", err.message);
+    res.status(500).send("Failed");
   }
 });
 
+// =====================
+// 🔎 SEARCH
+// =====================
 app.get("/search", verifyToken, async (req, res) => {
   const { q, type } = req.query;
 
-  if (!q || !type) {
-    return res.status(400).send("Missing query or type");
-  }
-
   try {
     const record = await Token.findOne({ userId: req.user.user_id });
-
-    if (!record) {
-      return res.status(401).send("Token not found");
-    }
 
     const response = await axios.get("https://api.spotify.com/v1/search", {
       headers: {
@@ -183,18 +179,17 @@ app.get("/search", verifyToken, async (req, res) => {
 
     res.json(response.data);
   } catch (err) {
-    console.error("Error in /search:", err.response?.data || err.message);
+    console.error("❌ search error:", err.message);
     res.status(500).send("Search failed");
   }
 });
 
+// =====================
+// 🔄 REFRESH
+// =====================
 app.get("/refresh_token", verifyToken, async (req, res) => {
   try {
     const record = await Token.findOne({ userId: req.user.user_id });
-
-    if (!record || !record.refreshToken) {
-      return res.status(401).send("No refresh token available");
-    }
 
     const response = await axios.post(
       "https://accounts.spotify.com/api/token",
@@ -209,47 +204,34 @@ app.get("/refresh_token", verifyToken, async (req, res) => {
             Buffer.from(
               `${SPOTIFY_CLIENT_ID}:${SPOTIFY_CLIENT_SECRET}`
             ).toString("base64"),
-          "Content-Type": "application/x-www-form-urlencoded",
         },
       }
     );
 
-    const { access_token, expires_in } = response.data;
-
-    record.accessToken = access_token;
-    record.expiresAt = new Date(Date.now() + expires_in * 1000);
+    record.accessToken = response.data.access_token;
     await record.save();
 
-    const newJWT = jwt.sign({ user_id: req.user.user_id }, JWT_SECRET, {
-      expiresIn: "1h",
-    });
-
-    res.cookie("jwt", newJWT, {
-      httpOnly: true,
-      sameSite: "lax",
-      secure: false,
-    });
-
-    res.status(200).send("Token refreshed");
+    res.sendStatus(200);
   } catch (err) {
-    console.error(
-      "Error in /refresh_token:",
-      err.response?.data || err.message
-    );
-    res.status(500).send("Token refresh failed");
+    console.error("❌ refresh error:", err.message);
+    res.status(500).send("Refresh failed");
   }
 });
 
+// =====================
+// 🚪 LOGOUT
+// =====================
 app.get("/logout", (req, res) => {
   res.clearCookie("jwt", {
     httpOnly: true,
-    sameSite: "lax",
-    secure: false,
+    secure: true,
+    sameSite: "none",
   });
 
   res.sendStatus(204);
 });
 
+// =====================
 app.listen(PORT, () => {
-  console.log(`Server running on http://127.0.0.1:${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
