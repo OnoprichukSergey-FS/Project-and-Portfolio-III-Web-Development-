@@ -23,7 +23,11 @@ const app = express();
 
 app.use(
   cors({
-    origin: ["http://localhost:3000", "http://127.0.0.1:3000"],
+    origin: [
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+      "https://sergey-spotify-search-app.netlify.app",
+    ],
     credentials: true,
   })
 );
@@ -124,7 +128,7 @@ app.get("/callback", async (req, res) => {
       secure: false,
     });
 
-    res.redirect("http://127.0.0.1:3000/dashboard");
+    res.redirect("https://sergey-spotify-search-app.netlify.app/dashboard");
   } catch (err) {
     console.error("Error in /callback:", err.response?.data || err.message);
     res.status(500).send("Authentication failed");
