@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchUser, refreshToken, logoutUser } from "./utils/api";
+import {
+  fetchUser,
+  refreshToken,
+  logoutUser,
+  saveAuthTokenFromUrl,
+} from "./utils/api";
 import Search from "./Search";
 import "../App.css";
 
@@ -11,6 +16,8 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   useEffect(() => {
+    saveAuthTokenFromUrl();
+
     const loadUser = async () => {
       try {
         const userData = await fetchUser();
@@ -18,8 +25,11 @@ export default function Dashboard() {
         setErrorUser(null);
       } catch {
         setUser(null);
-        setErrorUser("Failed to fetch user info");
-        navigate("/");
+        setErrorUser("Failed to fetch user info. Please log in again.");
+
+        setTimeout(() => {
+          navigate("/");
+        }, 1500);
       } finally {
         setLoadingUser(false);
       }
@@ -31,9 +41,12 @@ export default function Dashboard() {
       try {
         await refreshToken();
       } catch {
-        setErrorUser("Session expired, please log in again");
+        setErrorUser("Session expired, please log in again.");
         setUser(null);
-        navigate("/");
+
+        setTimeout(() => {
+          navigate("/");
+        }, 1500);
       }
     }, 50 * 60 * 1000);
 
@@ -75,7 +88,7 @@ export default function Dashboard() {
 
       {errorUser && <p className="error-text">{errorUser}</p>}
 
-      <Search />
+      {user && <Search />}
 
       <footer className="footer-note">
         This project uses the Spotify Web API and is not affiliated with
